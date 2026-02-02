@@ -19,8 +19,9 @@ function todayISODate() {
 async function main() {
   const slateDate = todayISODate();
 
-  // clean start
-  await prisma.bet.deleteMany();
+  // clean start (delete children first)
+  await prisma.ticketLeg.deleteMany();
+  await prisma.ticket.deleteMany();
   await prisma.match.deleteMany();
 
   // reset bankroll singleton

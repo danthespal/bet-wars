@@ -20,22 +20,7 @@ model Match {
   scoreHome       Int?
   scoreAway       Int?
   createdAt       DateTime    @default(now())
-  
-  bets            Bet[]
   ticketLegs      TicketLeg[]
-}
-
-model Bet {
-  id        Int       @id @default(autoincrement())
-  matchId   Int
-  pick      String
-  stake     Float
-  oddsUsed  Float
-  status    String    @default("open")
-  payout    Float?
-  placedAt  DateTime  @default(now())
-  settledAt DateTime?
-  match     Match     @relation(fields: [matchId], references: [id])
 }
 
 model Ticket {
