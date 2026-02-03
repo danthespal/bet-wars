@@ -72,6 +72,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Some matches not found" }, { status: 404 });
     }
 
+    // Bet lock: prevent betting after kickoff (UTC) or if match not scheduled
+    const nowMs = Date.now();
+    const lockedMatchIds: number[] = [];
+
+    for (const m of matches) {
+      if (m.status !== "scheduled") {
+        lockedMatchIds.push(m.id);
+        continue;
+      }
+
+      const kickoffMs = Date.parse(m.commenceTimeUTC);
+      if (!Number.isFinite(kickoffMs) || nowMs >= kickoffMs) {
+        lockedMatchIds.push(m.id);
+      }
+    }
+
+    if (lockedMatchIds.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Some matches are locked and cannot be bet on.",
+          lockedMatchIds,
+        },
+        { status: 400 }
+      );
+    }
+
     const matchById = new Map(matches.map((m) => [m.id, m]));
     const legsWithOdds = legs.map((l) => {
       const m = matchById.get(l.matchId)!;
