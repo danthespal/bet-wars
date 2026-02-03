@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Match } from "@prisma/client";
-
-type Pick = "1" | "X" | "2";
+import * as z from "zod";
 
 class HttpError extends Error {
   constructor(
@@ -14,30 +13,57 @@ class HttpError extends Error {
   }
 }
 
+const PickSchema = z.enum(["1", "X", "2"]);
+type Pick = z.infer<typeof PickSchema>;
+
+const TicketLegSchema = z
+  .object({
+    matchId: z.number().int().positive(),
+    pick: PickSchema,
+  })
+  .strict();
+
+const CreateTicketSchema = z
+  .object({
+    stake: z.number().finite().gt(0).max(1_000_000),
+    legs: z.array(TicketLegSchema).min(1).max(20),
+  })
+  .strict();
+
 function getOddsForPick(match: Match, pick: Pick) {
   return pick === "1" ? match.oddsHome : pick === "X" ? match.oddsDraw : match.oddsAway;
 }
 
+function badRequest(error: string, details?: unknown) {
+  return NextResponse.json({ ok: false, error, details }, { status: 400 });
+}
+
 export async function POST(req: Request) {
+  let body: unknown;
   try {
-    const body = await req.json();
-    const stake = Number(body.stake);
-    const legs = body.legs as { matchId: number; pick: Pick }[];
+    body = await req.json();
+  } catch {
+    return badRequest("Invalid JSON body");
+  }
 
-    if (!Number.isFinite(stake) || stake <= 0) {
-      return NextResponse.json({ ok: false, error: "Invalid stake" }, { status: 400 });
-    }
-    if (!Array.isArray(legs) || legs.length === 0) {
-      return NextResponse.json({ ok: false, error: "Select at least 1 match" }, { status: 400 });
-    }
+  const parsed = CreateTicketSchema.safeParse(body);
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((i) => ({
+      path: i.path.join("."),
+      message: i.message,
+      code: i.code,
+    }));
+    return badRequest("Invalid request", details);
+  }
 
-    // ensure one leg per match
+  const { stake, legs } = parsed.data;
+
+  try {
     const uniq = new Set(legs.map((l) => l.matchId));
     if (uniq.size !== legs.length) {
-      return NextResponse.json({ ok: false, error: "Only one pick per match" }, { status: 400 });
+      return badRequest("Only one pick per match");
     }
 
-    // Load matches and compute total odds snapshot
     const matches = await prisma.match.findMany({
       where: { id: { in: legs.map((l) => l.matchId) } },
     });
@@ -46,7 +72,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Some matches not found" }, { status: 404 });
     }
 
-    // Compute snapshot odds per leg + totalOdds (accumulator = product)
     const matchById = new Map(matches.map((m) => [m.id, m]));
     const legsWithOdds = legs.map((l) => {
       const m = matchById.get(l.matchId)!;
@@ -57,32 +82,22 @@ export async function POST(req: Request) {
     const totalOdds = legsWithOdds.reduce((acc, l) => acc * l.oddsUsed, 1);
 
     const ticket = await prisma.$transaction(async (tx) => {
-      // Ensure bankroll singleton exists.
       await tx.bankroll.upsert({
         where: { id: 1 },
         update: {},
         create: { id: 1, amount: 1000 },
       });
 
-      // Bankroll-safe (atomic) stake deduction:
-      // - perform a conditional decrement inside the same transaction
-      // - if no row was updated, bankroll was insufficient at the time of placement
       const updated = await tx.bankroll.updateMany({
-        where: {
-          id: 1,
-          amount: { gte: stake },
-        },
-        data: {
-          amount: { decrement: stake },
-        },
+        where: { id: 1, amount: { gte: stake } },
+        data: { amount: { decrement: stake } },
       });
 
       if (updated.count !== 1) {
         throw new HttpError(400, "Insufficient bankroll");
       }
 
-      // create ticket and legs
-      const t = await tx.ticket.create({
+      return tx.ticket.create({
         data: {
           stake,
           totalOdds,
@@ -98,22 +113,12 @@ export async function POST(req: Request) {
           legs: { include: { match: true } },
         },
       });
-
-      return t;
     });
 
     return NextResponse.json({ ok: true, ticket });
   } catch (e: unknown) {
-    // Prisma transactions generally rethrow user-throw errors as-is, but be defensive
-    // in case an error is wrapped with a `cause`.
     if (e instanceof HttpError) {
       return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
-    }
-    if (typeof e === "object" && e !== null && "cause" in e) {
-      const cause = (e as { cause?: unknown }).cause;
-      if (cause instanceof HttpError) {
-        return NextResponse.json({ ok: false, error: cause.message }, { status: cause.status });
-      }
     }
     const message = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
