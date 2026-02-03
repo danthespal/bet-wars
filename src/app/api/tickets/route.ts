@@ -4,6 +4,16 @@ import type { Match } from "@prisma/client";
 
 type Pick = "1" | "X" | "2";
 
+class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
 function getOddsForPick(match: Match, pick: Pick) {
   return pick === "1" ? match.oddsHome : pick === "X" ? match.oddsDraw : match.oddsAway;
 }
@@ -36,13 +46,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Some matches not found" }, { status: 404 });
     }
 
-    // Check bankroll
-    const bankroll = await prisma.bankroll.findUnique({ where: { id: 1 } });
-    const amount = bankroll?.amount ?? 0;
-    if (amount < stake) {
-      return NextResponse.json({ ok: false, error: "Insufficient bankroll" }, { status: 400 });
-    }
-
     // Compute snapshot odds per leg + totalOdds (accumulator = product)
     const matchById = new Map(matches.map((m) => [m.id, m]));
     const legsWithOdds = legs.map((l) => {
@@ -54,12 +57,29 @@ export async function POST(req: Request) {
     const totalOdds = legsWithOdds.reduce((acc, l) => acc * l.oddsUsed, 1);
 
     const ticket = await prisma.$transaction(async (tx) => {
-      // deduct stake once
+      // Ensure bankroll singleton exists.
       await tx.bankroll.upsert({
         where: { id: 1 },
-        update: { amount: amount - stake },
-        create: { id: 1, amount: 1000 - stake },
+        update: {},
+        create: { id: 1, amount: 1000 },
       });
+
+      // Bankroll-safe (atomic) stake deduction:
+      // - perform a conditional decrement inside the same transaction
+      // - if no row was updated, bankroll was insufficient at the time of placement
+      const updated = await tx.bankroll.updateMany({
+        where: {
+          id: 1,
+          amount: { gte: stake },
+        },
+        data: {
+          amount: { decrement: stake },
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new HttpError(400, "Insufficient bankroll");
+      }
 
       // create ticket and legs
       const t = await tx.ticket.create({
@@ -84,6 +104,17 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, ticket });
   } catch (e: unknown) {
+    // Prisma transactions generally rethrow user-throw errors as-is, but be defensive
+    // in case an error is wrapped with a `cause`.
+    if (e instanceof HttpError) {
+      return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
+    }
+    if (typeof e === "object" && e !== null && "cause" in e) {
+      const cause = (e as { cause?: unknown }).cause;
+      if (cause instanceof HttpError) {
+        return NextResponse.json({ ok: false, error: cause.message }, { status: cause.status });
+      }
+    }
     const message = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

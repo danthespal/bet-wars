@@ -107,6 +107,7 @@ export default function Home() {
   const [bankroll, setBankroll] = useState<number>(0);
   const [matches, setMatches] = useState<Match[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [slateDate, setSlateDate] = useState<string>("");
 
   // Slip: one pick per match
   const [slip, setSlip] = useState<Record<number, Pick>>({});
@@ -119,11 +120,12 @@ export default function Home() {
   // Ticket expand/collapse
   const [expandedTicketId, setExpandedTicketId] = useState<number | null>(null);
 
-  const todayISO = useMemo(() => {
+  const utcTodayISO = useMemo(() => {
     const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate()
-    ).padStart(2, "0")}`;
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   }, []);
 
   const slipLegs = useMemo(() => {
@@ -170,6 +172,7 @@ export default function Home() {
       setBankroll(b.amount ?? 0);
       setMatches(m.matches ?? []);
       setTickets(t.tickets ?? []);
+      setSlateDate(m.slateDate ?? utcTodayISO);
     });
   }
 
@@ -189,6 +192,7 @@ export default function Home() {
         setBankroll(b.amount ?? 0);
         setMatches(m.matches ?? []);
         setTickets(t.tickets ?? []);
+        setSlateDate(m.slateDate ?? utcTodayISO);
       });
     })();
 
@@ -196,15 +200,16 @@ export default function Home() {
       cancelled = true;
       if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     };
-  }, []);
+  }, [utcTodayISO]);
 
   function togglePick(matchId: number, p: Pick) {
     setSlip((prev) => {
       const current = prev[matchId];
       // click same pick again -> remove selection
       if (current === p) {
-        const { [matchId]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[matchId];
+        return next;
       }
       return { ...prev, [matchId]: p };
     });
@@ -212,8 +217,9 @@ export default function Home() {
 
   function removeFromSlip(matchId: number) {
     setSlip((prev) => {
-      const { [matchId]: _, ...rest } = prev;
-      return rest;
+      const next = { ...prev };
+      delete next[matchId];
+      return next;
     });
   }
 
@@ -282,7 +288,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900">Bet Wars</div>
-            <div className="text-xs text-slate-500">Mock Slate • {todayISO}</div>
+            <div className="text-xs text-slate-500">Mock Slate • {slateDate || utcTodayISO}</div>
           </div>
 
           <div className="flex items-center gap-2">
