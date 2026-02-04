@@ -1,7 +1,7 @@
 "use client";
 
 import type { Ticket } from "@/lib/types";
-import { fmtCents, pickLabel } from "@/lib/betting";
+import { fmtCents, formatKickoffUTC, pickLabel } from "@/lib/betting";
 
 function ticketStatusPill(t: Ticket) {
   if (t.status === "settled") {
@@ -55,6 +55,7 @@ export function TicketsList({
         <div className="mt-3 space-y-2">
           {tickets.slice(0, 8).map((t) => {
             const expanded = expandedTicketId === t.id;
+
             const potentialCents = Math.round(t.stakeCents * t.totalOdds);
 
             return (
@@ -93,6 +94,10 @@ export function TicketsList({
                           </span>
                         )}
                       </div>
+
+                      <div className="mt-2 text-xs text-slate-500">
+                        Placed: <span className="font-medium">{formatKickoffUTC(t.placedAt, true)}</span>
+                      </div>
                     </div>
 
                     <div className="shrink-0 text-xs text-slate-500">{expanded ? "Hide" : "View"}</div>
@@ -111,10 +116,19 @@ export function TicketsList({
                                 <span className="text-slate-400 font-normal">vs</span>{" "}
                                 {leg.match.awayTeam}
                               </div>
+
+                              <div className="mt-1 text-xs text-slate-500">
+                                Kickoff (UTC):{" "}
+                                <span className="font-medium">
+                                  {formatKickoffUTC(leg.match.commenceTimeUTC, true )}
+                                </span>
+                              </div>
+
                               <div className="mt-1 text-xs text-slate-600">
                                 Pick <b>{leg.pick}</b> ({pickLabel(leg.pick)}) • Odds{" "}
                                 <b className="tabular-nums">{leg.oddsUsed.toFixed(2)}</b>
                               </div>
+
                             </div>
                             <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
                               {String(leg.status).toUpperCase()}

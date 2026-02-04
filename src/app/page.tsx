@@ -26,9 +26,10 @@ export default function Home() {
   // Ticket expand/collapse
   const [expandedTicketId, setExpandedTicketId] = useState<number | null>(null);
 
-  const stakeCents = useMemo(() => parseMoneyToCents(stakeText) ?? 0, [stakeText]);
-
   const utcTodayISO = useMemo(() => utcTodayISOFn(), []);
+
+  const stakeCentsOrNull  = useMemo(() => parseMoneyToCents(stakeText), [stakeText]);
+  const stakeCents = useMemo(() => stakeCentsOrNull ?? 0, [stakeCentsOrNull]);
 
   const slipLegs: SlipLeg[] = useMemo(() => {
     return Object.entries(slip).map(([matchId, pick]) => ({
@@ -51,6 +52,18 @@ export default function Home() {
     if (stakeCents <= 0) return 0;
     return Math.round(stakeCents * slipTotalOdds);
   }, [stakeCents, slipTotalOdds]);
+
+  const stakeValid = stakeCentsOrNull != null && stakeCentsOrNull > 0;
+  const stakeTooHigh = stakeCentsOrNull != null && stakeCentsOrNull > bankrollCents;
+
+  const placeDisabled = slipLegs.length === 0 || !stakeValid || stakeTooHigh;
+
+  const placeDisabledReason = useMemo(() => {
+    if (slipLegs.length === 0) return null;
+    if (!stakeValid) return "Invalid stake. Use a number with up to 2 decimals (e.g. 10 or 10.50).";
+    if (stakeTooHigh) return "Stake is higher than bankroll.";
+    return null;
+  }, [slipLegs.length, stakeValid, stakeTooHigh]);
 
   function showToast(message: string) {
     setToast(message);
@@ -157,10 +170,11 @@ export default function Home() {
 
   async function onPlaceTicket() {
     if (slipLegs.length === 0) return showToast("Select at least 1 match.");
-    if (stakeCents <= 0) return showToast("Stake must be > 0");
+    if (!stakeValid) return showToast("Invalid stake.");
+    if (stakeTooHigh) return showToast("Stake is higher than bankroll.");
 
     showToast("Placing ticket...");
-    const stake = stakeCents / 100;
+    const stake = (stakeCentsOrNull ?? 0) / 100;
     const j = await postTicket({ stake, legs: slipLegs });
 
     if (!j.ok) {
@@ -173,7 +187,9 @@ export default function Home() {
         const preview = names.slice(0, 2).join(", ");
         const more = names.length > 2 ? ` (+${names.length - 2} more)` : "";
 
-        showToast(names.length ? `Locked matches: ${preview}${more}` : "Some matches are locked and cannot be bet on.");
+        showToast(
+          names.length ? `Locked matches: ${preview}${more}` : "Some matches are locked and cannot be bet on."
+        );
       } else {
         showToast(j.error ?? "Ticket failed");
       }
@@ -250,12 +266,7 @@ export default function Home() {
               </div>
             ) : (
               matches.map((m) => (
-                <MatchCard
-                  key={m.id}
-                  match={m}
-                  selectedPick={slip[m.id] ?? null}
-                  onPick={togglePick}
-                />
+                <MatchCard key={m.id} match={m} selectedPick={slip[m.id] ?? null} onPick={togglePick} />
               ))
             )}
           </div>
@@ -275,6 +286,8 @@ export default function Home() {
             onRemoveLeg={removeFromSlip}
             onClearSlip={clearSlip}
             onPlaceTicket={onPlaceTicket}
+            placeDisabled={placeDisabled}
+            placeDisabledReason={placeDisabledReason}
           />
 
           <TicketsList

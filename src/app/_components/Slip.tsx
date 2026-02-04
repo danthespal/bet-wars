@@ -1,7 +1,7 @@
 "use client";
 
 import type { Match, SlipLeg } from "@/lib/types";
-import { fmtCents, oddsForPick, parseMoneyToCents, pickLabel } from "@/lib/betting";
+import { fmtCents, normalizeMoneyInput, oddsForPick, parseMoneyToCents, pickLabel } from "@/lib/betting";
 
 export function Slip({
   slipLegs,
@@ -15,6 +15,8 @@ export function Slip({
   onRemoveLeg,
   onClearSlip,
   onPlaceTicket,
+  placeDisabled,
+  placeDisabledReason,
 }: {
   slipLegs: SlipLeg[];
   matches: Match[];
@@ -27,8 +29,12 @@ export function Slip({
   onRemoveLeg: (matchId: number) => void;
   onClearSlip: () => void;
   onPlaceTicket: () => void;
+  placeDisabled: boolean;
+  placeDisabledReason: string | null;
 }) {
-  const stakeCents = parseMoneyToCents(stakeText) ?? 0;
+  const stakeCentsOrNull = parseMoneyToCents(stakeText);
+  const stakeCents = stakeCentsOrNull ?? 0;
+  const stakeValid = stakeCentsOrNull != null && stakeCentsOrNull > 0;
   const profitCents = Math.max(0, potentialReturnCents - stakeCents);
 
   return (
@@ -95,7 +101,11 @@ export function Slip({
             inputMode="decimal"
             value={stakeText}
             onChange={(e) => onStakeTextChange(e.target.value)}
-            className="w-full rounded-lg border bg-white px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-slate-900/10"
+            onBlur={() => onStakeTextChange(normalizeMoneyInput(stakeText))}
+            className={
+              "w-full rounded-lg border bg-white px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 " +
+              (stakeValid ? "focus:ring-slate-900/10" : "border-rose-300 focus:ring-rose-500/20")
+            }
           />
           <button
             onClick={() => onStakeQuick("max")}
@@ -129,6 +139,12 @@ export function Slip({
         <div className="mt-2 text-xs text-slate-500">
           Bankroll: <b className="tabular-nums">{fmtCents(bankrollCents)}</b>
         </div>
+
+        {placeDisabledReason && (
+          <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            {placeDisabledReason}
+          </div>
+        )}
       </div>
 
       <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-xs text-slate-700">
@@ -148,7 +164,7 @@ export function Slip({
 
       <button
         onClick={onPlaceTicket}
-        disabled={slipLegs.length === 0}
+        disabled={placeDisabled}
         className="mt-4 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Place Ticket

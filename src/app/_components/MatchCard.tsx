@@ -1,7 +1,7 @@
 "use client";
 
 import type { Match, Pick } from "@/lib/types";
-import { isMatchLocked } from "@/lib/betting";
+import { formatKickoffUTC, isMatchLocked } from "@/lib/betting";
 
 function statusPill(match: Match) {
   if (match.status === "finished") {
@@ -68,7 +68,7 @@ export function MatchCard({
             {match.homeTeam} <span className="text-slate-400 font-normal">vs</span> {match.awayTeam}
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Kickoff (UTC): <span className="font-medium">{match.commenceTimeUTC}</span>
+            Kickoff (UTC): <span className="font-medium">{formatKickoffUTC(match.commenceTimeUTC)}</span>
           </div>
         </div>
         <div className="shrink-0">{statusPill(match)}</div>
