@@ -1,11 +1,11 @@
 "use client";
 
 import type { Ticket } from "@/lib/types";
-import { fmtMoney, pickLabel } from "@/lib/betting";
+import { fmtCents, pickLabel } from "@/lib/betting";
 
 function ticketStatusPill(t: Ticket) {
   if (t.status === "settled") {
-    const won = (t.payout ?? 0) > 0;
+    const won = (t.payoutCents ?? 0) > 0;
     return (
       <span
         className={
@@ -55,7 +55,7 @@ export function TicketsList({
         <div className="mt-3 space-y-2">
           {tickets.slice(0, 8).map((t) => {
             const expanded = expandedTicketId === t.id;
-            const potential = t.stake * t.totalOdds;
+            const potentialCents = Math.round(t.stakeCents * t.totalOdds);
 
             return (
               <div key={t.id} className="rounded-lg border bg-white">
@@ -75,20 +75,20 @@ export function TicketsList({
                           Legs <b>{t.legs.length}</b>
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                          Stake <b className="tabular-nums">{fmtMoney(t.stake)}</b>
+                          Stake <b className="tabular-nums">{fmtCents(t.stakeCents)}</b>
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
                           Odds <b className="tabular-nums">{t.totalOdds.toFixed(2)}</b>
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                          Return <b className="tabular-nums">{fmtMoney(potential)}</b>
+                          Return <b className="tabular-nums">{fmtCents(potentialCents)}</b>
                         </span>
 
                         {t.status === "settled" && (
                           <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
                             Payout{" "}
                             <b className="tabular-nums">
-                              {t.payout == null ? "-" : fmtMoney(t.payout)}
+                              {t.payoutCents == null ? "-" : fmtCents(t.payoutCents)}
                             </b>
                           </span>
                         )}

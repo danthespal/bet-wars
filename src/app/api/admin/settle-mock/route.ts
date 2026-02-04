@@ -9,15 +9,10 @@ function outcomeFromScore(h: number, a: number): Pick {
   return "X";
 }
 
-// Simple score generator (not realistic yet, but good for mechanic tests)
 function randomScore(): { home: number; away: number } {
-  const home = Math.floor(Math.random() * 4); // 0..3
+  const home = Math.floor(Math.random() * 4);
   const away = Math.floor(Math.random() * 4);
   return { home, away };
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
 }
 
 export async function POST() {
@@ -35,7 +30,6 @@ export async function POST() {
   const resultPick = outcomeFromScore(score.home, score.away);
 
   const settled = await prisma.$transaction(async (tx) => {
-    // mark match finished
     const updatedMatch = await tx.match.update({
       where: { id: match.id },
       data: {
@@ -45,7 +39,6 @@ export async function POST() {
       },
     });
 
-    // settle all open legs for this match
     const legs = await tx.ticketLeg.findMany({
       where: { matchId: match.id, status: "open" },
     });
@@ -66,7 +59,7 @@ export async function POST() {
     }
 
     let ticketsSettled = 0;
-    let totalPayout = 0;
+    let totalPayoutCents = 0;
 
     for (const ticketId of affectedTicketIds) {
       const t = await tx.ticket.findUnique({
@@ -81,32 +74,33 @@ export async function POST() {
       if (anyOpen) continue;
 
       const anyLost = t.legs.some((l) => l.status === "lost");
+
       const effectiveOdds = t.legs.reduce((acc, l) => {
         if (l.status === "void" || l.status === "push") return acc * 1;
         return acc * l.oddsUsed;
       }, 1);
 
-      const payout = anyLost ? 0 : round2(t.stake * effectiveOdds);
+      const payoutCents = anyLost ? 0 : Math.round(t.stakeCents * effectiveOdds);
 
       await tx.ticket.update({
         where: { id: ticketId },
         data: {
           status: "settled",
-          payout,
+          payoutCents,
           settledAt: new Date(),
-          totalOdds: round2(effectiveOdds),
+          totalOdds: effectiveOdds,
         },
       });
 
-      if (payout > 0) {
+      if (payoutCents > 0) {
         await tx.bankroll.update({
           where: { id: 1 },
-          data: { amount: { increment: payout } },
+          data: { amountCents: { increment: payoutCents } },
         });
       }
 
       ticketsSettled += 1;
-      totalPayout += payout;
+      totalPayoutCents += payoutCents;
     }
 
     const bankroll = await tx.bankroll.findUnique({ where: { id: 1 } });
@@ -116,8 +110,8 @@ export async function POST() {
       resultPick,
       legsSettled: legs.length,
       ticketsSettled,
-      totalPayout: round2(totalPayout),
-      bankroll: bankroll?.amount ?? 0,
+      totalPayoutCents,
+      bankrollCents: bankroll?.amountCents ?? 0,
     };
   });
 
@@ -127,7 +121,7 @@ export async function POST() {
     resultPick: settled.resultPick,
     legsSettled: settled.legsSettled,
     ticketsSettled: settled.ticketsSettled,
-    totalPayout: settled.totalPayout,
-    bankroll: settled.bankroll,
+    totalPayoutCents: settled.totalPayoutCents,
+    bankrollCents: settled.bankrollCents,
   });
 }

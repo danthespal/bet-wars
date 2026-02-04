@@ -6,8 +6,8 @@ async function getJSON<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchBankroll(): Promise<{ amount: number }> {
-  return getJSON<{ amount: number }>("/api/bankroll");
+export async function fetchBankroll(): Promise<{ amountCents: number }> {
+  return getJSON<{ amountCents: number }>("/api/bankroll");
 }
 
 export async function fetchTodayMatches(): Promise<{ slateDate: string; matches: Match[] }> {
@@ -19,7 +19,7 @@ export async function fetchTickets(): Promise<{ tickets: Ticket[] }> {
 }
 
 export type ResetResponse =
-  | { ok: true; slateDate: string; matches: number; bankroll: number }
+  | { ok: true; slateDate: string; matches: number; bankrollCents: number }
   | { ok: false; error?: string };
 
 export async function postReset(): Promise<ResetResponse> {
@@ -28,7 +28,7 @@ export async function postReset(): Promise<ResetResponse> {
 }
 
 export type SettleMockResponse =
-  | { ok: true; match?: { homeTeam: string; awayTeam: string; scoreHome: number; scoreAway: number }; message?: string }
+  | { ok: true; match?: { homeTeam: string; awayTeam: string; scoreHome: number; scoreAway: number }; message?: string; bankrollCents?: number; totalPayoutCents?: number }
   | { ok: false; error?: string };
 
 export async function postSettleMock(): Promise<SettleMockResponse> {

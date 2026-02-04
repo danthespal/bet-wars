@@ -35,8 +35,8 @@ export async function POST() {
     // reset bankroll singleton
     await tx.bankroll.upsert({
       where: { id: 1 },
-      update: { amount: 1000 },
-      create: { id: 1, amount: 1000 },
+      update: { amountCents: 100000 },
+      create: { id: 1, amountCents: 100000 },
     });
 
     // reseed matches
@@ -63,7 +63,7 @@ export async function POST() {
       });
     }
 
-    return { slateDate, matches: games.length, bankroll: 1000 };
+    return { slateDate, matches: games.length, bankrollCents: 100000 };
   });
 
   return NextResponse.json({ ok: true, ...result });

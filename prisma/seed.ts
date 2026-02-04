@@ -27,8 +27,8 @@ async function main() {
   // reset bankroll singleton
   await prisma.bankroll.upsert({
     where: { id: 1 },
-    update: { amount: 1000 },
-    create: { id: 1, amount: 1000 },
+    update: { amountCents: 100000 },
+    create: { id: 1, amountCents: 100000 },
   });
 
   // mock matches (8) + frozen odds

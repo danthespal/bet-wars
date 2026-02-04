@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import type { Match, Pick, SlipLeg, Ticket } from "@/lib/types";
-import { isMatchLocked, oddsForPick, utcTodayISO as utcTodayISOFn } from "@/lib/betting";
+import { fmtCents, isMatchLocked, oddsForPick, parseMoneyToCents, utcTodayISO as utcTodayISOFn } from "@/lib/betting";
 import { fetchBankroll, fetchTickets, fetchTodayMatches, postReset, postSettleMock, postTicket } from "@/lib/api";
 import { ToastBar } from "@/app/_components/ToastBar";
 import { MatchCard } from "@/app/_components/MatchCard";
@@ -10,14 +10,14 @@ import { Slip } from "@/app/_components/Slip";
 import { TicketsList } from "@/app/_components/TicketsList";
 
 export default function Home() {
-  const [bankroll, setBankroll] = useState<number>(0);
+  const [bankrollCents, setBankrollCents] = useState<number>(0);
   const [matches, setMatches] = useState<Match[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slateDate, setSlateDate] = useState<string>("");
 
   // Slip: one pick per match
   const [slip, setSlip] = useState<Record<number, Pick>>({});
-  const [stake, setStake] = useState<number>(50);
+  const [stakeText, setStakeText] = useState<string>("50");
 
   // UI
   const [toast, setToast] = useState<string>("");
@@ -25,6 +25,8 @@ export default function Home() {
 
   // Ticket expand/collapse
   const [expandedTicketId, setExpandedTicketId] = useState<number | null>(null);
+
+  const stakeCents = useMemo(() => parseMoneyToCents(stakeText) ?? 0, [stakeText]);
 
   const utcTodayISO = useMemo(() => utcTodayISOFn(), []);
 
@@ -45,10 +47,10 @@ export default function Home() {
     return product;
   }, [slipLegs, matches]);
 
-  const slipPotentialReturn = useMemo(() => {
-    if (!Number.isFinite(stake) || stake <= 0) return 0;
-    return stake * slipTotalOdds;
-  }, [stake, slipTotalOdds]);
+  const slipPotentialReturnCents = useMemo(() => {
+    if (stakeCents <= 0) return 0;
+    return Math.round(stakeCents * slipTotalOdds);
+  }, [stakeCents, slipTotalOdds]);
 
   function showToast(message: string) {
     setToast(message);
@@ -65,7 +67,7 @@ export default function Home() {
     const [b, m, t] = await Promise.all([fetchBankroll(), fetchTodayMatches(), fetchTickets()]);
 
     startTransition(() => {
-      setBankroll(b.amount ?? 0);
+      setBankrollCents(b.amountCents ?? 0);
       setMatches(m.matches ?? []);
       setTickets(t.tickets ?? []);
       setSlateDate(m.slateDate ?? utcTodayISO);
@@ -80,7 +82,7 @@ export default function Home() {
       if (cancelled) return;
 
       startTransition(() => {
-        setBankroll(b.amount ?? 0);
+        setBankrollCents(b.amountCents ?? 0);
         setMatches(m.matches ?? []);
         setTickets(t.tickets ?? []);
         setSlateDate(m.slateDate ?? utcTodayISO);
@@ -122,11 +124,14 @@ export default function Home() {
 
   function stakeQuick(kind: "plus10" | "plus50" | "plus100" | "max") {
     if (kind === "max") {
-      setStake(Math.max(1, Math.floor(bankroll)));
+      const max = Math.max(1, Math.floor(bankrollCents / 100));
+      setStakeText(String(max));
       return;
     }
-    const add = kind === "plus10" ? 10 : kind === "plus50" ? 50 : 100;
-    setStake((s) => Math.max(1, Math.round((s + add) * 100) / 100));
+
+    const addCents = kind === "plus10" ? 1000 : kind === "plus50" ? 5000 : 10000;
+    const next = Math.max(1, stakeCents + addCents);
+    setStakeText((next / 100).toFixed(2));
   }
 
   async function onReset() {
@@ -152,9 +157,10 @@ export default function Home() {
 
   async function onPlaceTicket() {
     if (slipLegs.length === 0) return showToast("Select at least 1 match.");
-    if (!Number.isFinite(stake) || stake <= 0) return showToast("Stake must be > 0.");
+    if (stakeCents <= 0) return showToast("Stake must be > 0");
 
     showToast("Placing ticket...");
+    const stake = stakeCents / 100;
     const j = await postTicket({ stake, legs: slipLegs });
 
     if (!j.ok) {
@@ -192,7 +198,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 shadow-sm">
               <span className="text-xs text-slate-500">Bankroll</span>
-              <span className="text-sm font-semibold tabular-nums text-slate-900">{bankroll.toFixed(2)}</span>
+              <span className="text-sm font-semibold tabular-nums text-slate-900">{fmtCents(bankrollCents)}</span>
             </div>
 
             <button
@@ -233,7 +239,7 @@ export default function Home() {
 
             <div className="sm:hidden rounded-full border bg-white px-3 py-1.5 shadow-sm">
               <span className="text-xs text-slate-500">Bankroll</span>{" "}
-              <span className="text-sm font-semibold tabular-nums text-slate-900">{bankroll.toFixed(2)}</span>
+              <span className="text-sm font-semibold tabular-nums text-slate-900">{fmtCents(bankrollCents)}</span>
             </div>
           </div>
 
@@ -260,11 +266,11 @@ export default function Home() {
           <Slip
             slipLegs={slipLegs}
             matches={matches}
-            stake={stake}
-            bankroll={bankroll}
+            stakeText={stakeText}
+            bankrollCents={bankrollCents}
             totalOdds={slipTotalOdds}
-            potentialReturn={slipPotentialReturn}
-            onStakeChange={setStake}
+            potentialReturnCents={slipPotentialReturnCents}
+            onStakeTextChange={setStakeText}
             onStakeQuick={stakeQuick}
             onRemoveLeg={removeFromSlip}
             onClearSlip={clearSlip}

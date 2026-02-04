@@ -4,10 +4,7 @@ import type { Match } from "@prisma/client";
 import * as z from "zod";
 
 class HttpError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string
-  ) {
+  constructor(public readonly status: number, message: string) {
     super(message);
     this.name = "HttpError";
   }
@@ -38,6 +35,10 @@ function badRequest(error: string, details?: unknown) {
   return NextResponse.json({ ok: false, error, details }, { status: 400 });
 }
 
+function toCents(amount: number) {
+  return Math.round(amount * 100);
+}
+
 export async function POST(req: Request) {
   let body: unknown;
   try {
@@ -57,6 +58,11 @@ export async function POST(req: Request) {
   }
 
   const { stake, legs } = parsed.data;
+  const stakeCents = toCents(stake);
+
+  if (!Number.isFinite(stakeCents) || stakeCents <= 0) {
+    return badRequest("Invalid stake");
+  }
 
   try {
     const uniq = new Set(legs.map((l) => l.matchId));
@@ -112,12 +118,12 @@ export async function POST(req: Request) {
       await tx.bankroll.upsert({
         where: { id: 1 },
         update: {},
-        create: { id: 1, amount: 1000 },
+        create: { id: 1, amountCents: 100000 },
       });
 
       const updated = await tx.bankroll.updateMany({
-        where: { id: 1, amount: { gte: stake } },
-        data: { amount: { decrement: stake } },
+        where: { id: 1, amountCents: { gte: stakeCents } },
+        data: { amountCents: { decrement: stakeCents } },
       });
 
       if (updated.count !== 1) {
@@ -126,7 +132,7 @@ export async function POST(req: Request) {
 
       return tx.ticket.create({
         data: {
-          stake,
+          stakeCents,
           totalOdds,
           legs: {
             create: legsWithOdds.map((l) => ({

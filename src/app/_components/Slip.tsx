@@ -1,16 +1,16 @@
 "use client";
 
 import type { Match, SlipLeg } from "@/lib/types";
-import { fmtMoney, oddsForPick, pickLabel } from "@/lib/betting";
+import { fmtCents, oddsForPick, parseMoneyToCents, pickLabel } from "@/lib/betting";
 
 export function Slip({
   slipLegs,
   matches,
-  stake,
-  bankroll,
+  stakeText,
+  bankrollCents,
   totalOdds,
-  potentialReturn,
-  onStakeChange,
+  potentialReturnCents,
+  onStakeTextChange,
   onStakeQuick,
   onRemoveLeg,
   onClearSlip,
@@ -18,16 +18,19 @@ export function Slip({
 }: {
   slipLegs: SlipLeg[];
   matches: Match[];
-  stake: number;
-  bankroll: number;
+  stakeText: string;
+  bankrollCents: number;
   totalOdds: number;
-  potentialReturn: number;
-  onStakeChange: (stake: number) => void;
+  potentialReturnCents: number;
+  onStakeTextChange: (stakeText: string) => void;
   onStakeQuick: (kind: "plus10" | "plus50" | "plus100" | "max") => void;
   onRemoveLeg: (matchId: number) => void;
   onClearSlip: () => void;
   onPlaceTicket: () => void;
 }) {
+  const stakeCents = parseMoneyToCents(stakeText) ?? 0;
+  const profitCents = Math.max(0, potentialReturnCents - stakeCents);
+
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -76,7 +79,6 @@ export function Slip({
         )}
       </div>
 
-      {/* Stake */}
       <div className="mt-3">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-medium text-slate-700">Stake</label>
@@ -89,10 +91,10 @@ export function Slip({
 
         <div className="mt-1 flex items-center gap-2">
           <input
-            type="number"
-            min={1}
-            value={stake}
-            onChange={(e) => onStakeChange(Number(e.target.value))}
+            type="text"
+            inputMode="decimal"
+            value={stakeText}
+            onChange={(e) => onStakeTextChange(e.target.value)}
             className="w-full rounded-lg border bg-white px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-slate-900/10"
           />
           <button
@@ -125,11 +127,10 @@ export function Slip({
         </div>
 
         <div className="mt-2 text-xs text-slate-500">
-          Bankroll: <b className="tabular-nums">{fmtMoney(bankroll)}</b>
+          Bankroll: <b className="tabular-nums">{fmtCents(bankrollCents)}</b>
         </div>
       </div>
 
-      {/* Combined odds + placement */}
       <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-xs text-slate-700">
         <div className="flex items-center justify-between">
           <span>Total odds</span>
@@ -137,15 +138,11 @@ export function Slip({
         </div>
         <div className="mt-1 flex items-center justify-between">
           <span>Potential return</span>
-          <b className="tabular-nums text-slate-900">
-            {slipLegs.length ? fmtMoney(potentialReturn) : "-"}
-          </b>
+          <b className="tabular-nums text-slate-900">{slipLegs.length ? fmtCents(potentialReturnCents) : "-"}</b>
         </div>
         <div className="mt-1 flex items-center justify-between">
           <span>Profit</span>
-          <b className="tabular-nums text-slate-900">
-            {slipLegs.length ? fmtMoney(potentialReturn - stake) : "-"}
-          </b>
+          <b className="tabular-nums text-slate-900">{slipLegs.length ? fmtCents(profitCents) : "-"}</b>
         </div>
       </div>
 

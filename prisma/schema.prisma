@@ -24,36 +24,37 @@ model Match {
 }
 
 model Ticket {
-  id        Int       @id @default(autoincrement())
-  stake     Float
-  totalOdds Float
-  status    String    @default("open") // open|settled|void
-  payout    Float?
-  placedAt  DateTime  @default(now())
-  settledAt DateTime?
+  id          Int       @id @default(autoincrement())
+
+  stakeCents  Int
+  payoutCents Int?
+
+  totalOdds   Float
+  status      String    @default("open") // open|settled|void
+  placedAt    DateTime  @default(now())
+  settledAt   DateTime?
 
   legs TicketLeg[]
 }
 
 model TicketLeg {
-  id       Int    @id @default(autoincrement())
-  ticketId Int
-  matchId  Int
-  pick     String // "1"|"X"|"2"
-  oddsUsed Float
+  id        Int    @id @default(autoincrement())
+  ticketId  Int
+  matchId   Int
+  pick      String // "1"|"X"|"2"
+  oddsUsed  Float
 
-  // Resolution
   status    String    @default("open") // open|won|lost|push|void
   settledAt DateTime?
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   match  Match  @relation(fields: [matchId], references: [id])
 
-  @@unique([ticketId, matchId]) // one leg per match per ticket
+  @@unique([ticketId, matchId])
 }
 
 model Bankroll {
-  id        Int      @id @default(autoincrement())
-  amount    Float    @default(1000)
-  updatedAt DateTime @updatedAt
+  id          Int       @id @default(autoincrement())
+  amountCents Int       @default(100000) // 1000.00
+  updatedAt   DateTime  @updatedAt
 }
