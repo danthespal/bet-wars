@@ -1,8 +1,8 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Match, Pick, SlipLeg, Ticket } from "@/lib/types";
-import { fmtCents, isMatchLocked, oddsForPick, parseMoneyToCents, utcTodayISO as utcTodayISOFn } from "@/lib/betting";
+import { fmtCents, isMatchLocked, oddsForPick, parseMoneyToCents, utcTodayISODate } from "@/lib/betting";
 import { fetchBankroll, fetchTickets, fetchTodayMatches, postReset, postSettleMock, postTicket } from "@/lib/api";
 import { ToastBar } from "@/app/_components/ToastBar";
 import { MatchCard } from "@/app/_components/MatchCard";
@@ -22,13 +22,14 @@ export default function Home() {
   // UI
   const [toast, setToast] = useState<string>("");
   const toastTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef<boolean>(false);
 
   // Ticket expand/collapse
   const [expandedTicketId, setExpandedTicketId] = useState<number | null>(null);
 
-  const utcTodayISO = useMemo(() => utcTodayISOFn(), []);
+  const utcTodayISO = useMemo(() => utcTodayISODate(), []);
 
-  const stakeCentsOrNull  = useMemo(() => parseMoneyToCents(stakeText), [stakeText]);
+  const stakeCentsOrNull = useMemo(() => parseMoneyToCents(stakeText), [stakeText]);
   const stakeCents = useMemo(() => stakeCentsOrNull ?? 0, [stakeCentsOrNull]);
 
   const slipLegs: SlipLeg[] = useMemo(() => {
@@ -76,8 +77,9 @@ export default function Home() {
     }, 2500);
   }
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const [b, m, t] = await Promise.all([fetchBankroll(), fetchTodayMatches(), fetchTickets()]);
+    if (!isMountedRef.current) return;
 
     startTransition(() => {
       setBankrollCents(b.amountCents ?? 0);
@@ -85,28 +87,20 @@ export default function Home() {
       setTickets(t.tickets ?? []);
       setSlateDate(m.slateDate ?? utcTodayISO);
     });
-  }
+  }, [utcTodayISO]);
 
   useEffect(() => {
-    let cancelled = false;
+    isMountedRef.current = true;
 
     (async () => {
-      const [b, m, t] = await Promise.all([fetchBankroll(), fetchTodayMatches(), fetchTickets()]);
-      if (cancelled) return;
-
-      startTransition(() => {
-        setBankrollCents(b.amountCents ?? 0);
-        setMatches(m.matches ?? []);
-        setTickets(t.tickets ?? []);
-        setSlateDate(m.slateDate ?? utcTodayISO);
-      });
+      await refresh();
     })();
 
     return () => {
-      cancelled = true;
+      isMountedRef.current = false;
       if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     };
-  }, [utcTodayISO]);
+  }, [refresh]);
 
   function togglePick(matchId: number, p: Pick) {
     const m = matches.find((x) => x.id === matchId);

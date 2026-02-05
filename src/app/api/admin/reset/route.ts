@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-function todayISODate() {
-  const d = new Date();
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+import { utcTodayISODate } from "@/lib/betting";
 
 export async function POST() {
-  const slateDate = todayISODate();
+  const slateDate = utcTodayISODate();
 
   const games: [string, string][] = [
     ["Portsmouth", "Bolton"],

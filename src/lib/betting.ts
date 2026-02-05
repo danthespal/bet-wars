@@ -53,7 +53,7 @@ export function formatKickoffUTC(iso: string, withDate = false): string {
   return withDate ? `${yyyy}-${mm}-${dd} ${hh}:${min} UTC` : `${hh}:${min} UTC`;
 }
 
-export function utcTodayISO() {
+export function utcTodayISODate() {
   const d = new Date();
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");

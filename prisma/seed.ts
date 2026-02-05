@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { utcTodayISODate } from "../src/lib/betting";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({
@@ -8,16 +9,8 @@ const prisma = new PrismaClient({
   }),
 });
 
-function todayISODate() {
-  const d = new Date();
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 async function main() {
-  const slateDate = todayISODate();
+  const slateDate = utcTodayISODate();
 
   // clean start (delete children first)
   await prisma.ticketLeg.deleteMany();
