@@ -10,9 +10,7 @@ function ticketStatusPill(t: Ticket) {
       <span
         className={
           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 " +
-          (won
-            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-            : "bg-rose-50 text-rose-700 ring-rose-200")
+          (won ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200")
         }
       >
         {won ? "WON" : "LOST"}
@@ -27,10 +25,18 @@ function ticketStatusPill(t: Ticket) {
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
       OPEN
     </span>
   );
+}
+
+function legStatusGlyph(status: string) {
+  const s = String(status).toLowerCase();
+  if (s === "won") return "✓";
+  if (s === "lost") return "×";
+  if (s === "void" || s === "push") return "–";
+  return "⏳";
 }
 
 export function TicketsList({
@@ -43,7 +49,7 @@ export function TicketsList({
   onToggleExpanded: (ticketId: number) => void;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-900">My Tickets</div>
         <div className="text-xs text-slate-500">Total {tickets.length}</div>
@@ -57,46 +63,45 @@ export function TicketsList({
             const expanded = expandedTicketId === t.id;
 
             const potentialCents = Math.round(t.stakeCents * t.totalOdds);
+            const payoutCents = t.payoutCents ?? null;
 
             return (
-              <div key={t.id} className="rounded-lg border bg-white">
-                <button
-                  onClick={() => onToggleExpanded(t.id)}
-                  className="w-full p-3 text-left hover:bg-slate-50"
-                >
-                  <div className="flex items-start justify-between gap-2">
+              <div key={t.id} className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+                <button onClick={() => onToggleExpanded(t.id)} className="w-full p-3 text-left hover:bg-slate-50">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-semibold text-slate-900">Ticket #{t.id}</div>
                         {ticketStatusPill(t)}
+                        <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                          {t.legs.length}-leg
+                        </span>
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                          Legs <b>{t.legs.length}</b>
-                        </span>
-                        <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                          Stake <b className="tabular-nums">{fmtCents(t.stakeCents)}</b>
-                        </span>
+                      <div className="mt-1 text-xs text-slate-600">
+                        <span className="font-medium">Stake</span>{" "}
+                        <span className="font-semibold tabular-nums text-slate-900">{fmtCents(t.stakeCents)}</span>
+                        <span className="text-slate-400"> → </span>
+                        <span className="font-medium">Return</span>{" "}
+                        <span className="font-semibold tabular-nums text-slate-900">{fmtCents(potentialCents)}</span>
+                        {t.status === "settled" && (
+                          <>
+                            <span className="text-slate-400"> • </span>
+                            <span className="font-medium">Payout</span>{" "}
+                            <span className="font-semibold tabular-nums text-slate-900">
+                              {payoutCents == null ? "-" : fmtCents(payoutCents)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                         <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
                           Odds <b className="tabular-nums">{t.totalOdds.toFixed(2)}</b>
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                          Return <b className="tabular-nums">{fmtCents(potentialCents)}</b>
+                          Placed <b className="tabular-nums">{formatKickoffUTC(t.placedAt, true)}</b>
                         </span>
-
-                        {t.status === "settled" && (
-                          <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
-                            Payout{" "}
-                            <b className="tabular-nums">
-                              {t.payoutCents == null ? "-" : fmtCents(t.payoutCents)}
-                            </b>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-2 text-xs text-slate-500">
-                        Placed: <span className="font-medium">{formatKickoffUTC(t.placedAt, true)}</span>
                       </div>
                     </div>
 
@@ -105,33 +110,35 @@ export function TicketsList({
                 </button>
 
                 {expanded && (
-                  <div className="border-t bg-slate-50 p-3">
+                  <div className="border-t border-slate-200/70 bg-slate-50 p-3">
                     <div className="space-y-2">
                       {t.legs.map((leg) => (
-                        <div key={leg.id} className="rounded-lg border bg-white p-3">
-                          <div className="flex items-start justify-between gap-2">
+                        <div key={leg.id} className="rounded-2xl border border-slate-200/70 bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="truncate text-sm font-semibold text-slate-900">
-                                {leg.match.homeTeam}{" "}
-                                <span className="text-slate-400 font-normal">vs</span>{" "}
+                                {leg.match.homeTeam} <span className="font-normal text-slate-400">vs</span>{" "}
                                 {leg.match.awayTeam}
                               </div>
 
                               <div className="mt-1 text-xs text-slate-500">
-                                Kickoff (UTC):{" "}
-                                <span className="font-medium">
-                                  {formatKickoffUTC(leg.match.commenceTimeUTC, true )}
-                                </span>
+                                Kickoff{" "}
+                                <span className="font-medium">{formatKickoffUTC(leg.match.commenceTimeUTC, true)}</span>
                               </div>
 
                               <div className="mt-1 text-xs text-slate-600">
-                                Pick <b>{leg.pick}</b> ({pickLabel(leg.pick)}) • Odds{" "}
-                                <b className="tabular-nums">{leg.oddsUsed.toFixed(2)}</b>
+                                <span className="font-medium">Pick</span>{" "}
+                                <span className="font-semibold text-slate-900">{leg.pick}</span>{" "}
+                                <span className="text-slate-500">({pickLabel(leg.pick)})</span>
+                                <span className="text-slate-400"> • </span>
+                                <span className="font-medium">Odds</span>{" "}
+                                <span className="font-semibold tabular-nums text-slate-900">{leg.oddsUsed.toFixed(2)}</span>
                               </div>
-
                             </div>
-                            <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                              {String(leg.status).toUpperCase()}
+
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                              <span aria-hidden="true">{legStatusGlyph(String(leg.status))}</span>
+                              <span>{String(leg.status).toUpperCase()}</span>
                             </span>
                           </div>
                         </div>
