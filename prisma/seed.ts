@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { ensureMockUsers, resetMockBankrolls } from "../src/lib/mock-users";
 import { utcTodayISODate } from "../src/lib/betting";
 
 const prisma = new PrismaClient({
@@ -12,17 +13,14 @@ const prisma = new PrismaClient({
 async function main() {
   const slateDate = utcTodayISODate();
 
+  const { adminUser, demoUser } = await ensureMockUsers(prisma);
+
   // clean start (delete children first)
   await prisma.ticketLeg.deleteMany();
   await prisma.ticket.deleteMany();
   await prisma.match.deleteMany();
 
-  // reset bankroll singleton
-  await prisma.bankroll.upsert({
-    where: { id: 1 },
-    update: { amountCents: 100000 },
-    create: { id: 1, amountCents: 100000 },
-  });
+  await resetMockBankrolls(prisma);
 
   // mock matches (8) + frozen odds
   const base = new Date();
@@ -64,6 +62,8 @@ async function main() {
   }
 
   console.log(`✅ Seeded ${games.length} matches for ${slateDate}`);
+  console.log(`👤 Demo user: ${demoUser.email}`);
+  console.log(`🛡️ Admin user: ${adminUser.email}`);
 }
 
 main()

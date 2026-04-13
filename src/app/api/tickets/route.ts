@@ -1,17 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import type { Match } from "@prisma/client";
+import { requireUser } from "@/features/auth/server/require-user";
+import { createTicketForUser, listUserTickets, TicketServiceError } from "@/features/tickets/server/service";
 import * as z from "zod";
 
-class HttpError extends Error {
-  constructor(public readonly status: number, message: string) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
-
 const PickSchema = z.enum(["1", "X", "2"]);
-type Pick = z.infer<typeof PickSchema>;
 
 const TicketLegSchema = z
   .object({
@@ -27,10 +19,6 @@ const CreateTicketSchema = z
   })
   .strict();
 
-function getOddsForPick(match: Match, pick: Pick) {
-  return pick === "1" ? match.oddsHome : pick === "X" ? match.oddsDraw : match.oddsAway;
-}
-
 function badRequest(error: string, details?: unknown) {
   return NextResponse.json({ ok: false, error, details }, { status: 400 });
 }
@@ -40,6 +28,9 @@ function toCents(amount: number) {
 }
 
 export async function POST(req: Request) {
+  const auth = requireUser(req);
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -65,109 +56,29 @@ export async function POST(req: Request) {
   }
 
   try {
-    const uniq = new Set(legs.map((l) => l.matchId));
-    if (uniq.size !== legs.length) {
-      return badRequest("Only one pick per match");
-    }
-
-    const matches = await prisma.match.findMany({
-      where: { id: { in: legs.map((l) => l.matchId) } },
-    });
-
-    if (matches.length !== legs.length) {
-      return NextResponse.json({ ok: false, error: "Some matches not found" }, { status: 404 });
-    }
-
-    // Bet lock: prevent betting after kickoff (UTC) or if match not scheduled
-    const nowMs = Date.now();
-    const lockedMatchIds: number[] = [];
-
-    for (const m of matches) {
-      if (m.status !== "scheduled") {
-        lockedMatchIds.push(m.id);
-        continue;
-      }
-
-      const kickoffMs = Date.parse(m.commenceTimeUTC);
-      if (!Number.isFinite(kickoffMs) || nowMs >= kickoffMs) {
-        lockedMatchIds.push(m.id);
-      }
-    }
-
-    if (lockedMatchIds.length > 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Some matches are locked and cannot be bet on.",
-          lockedMatchIds,
-        },
-        { status: 400 }
-      );
-    }
-
-    const matchById = new Map(matches.map((m) => [m.id, m]));
-    const legsWithOdds = legs.map((l) => {
-      const m = matchById.get(l.matchId)!;
-      const oddsUsed = getOddsForPick(m, l.pick);
-      return { ...l, oddsUsed };
-    });
-
-    const totalOdds = legsWithOdds.reduce((acc, l) => acc * l.oddsUsed, 1);
-
-    const ticket = await prisma.$transaction(async (tx) => {
-      await tx.bankroll.upsert({
-        where: { id: 1 },
-        update: {},
-        create: { id: 1, amountCents: 100000 },
-      });
-
-      const updated = await tx.bankroll.updateMany({
-        where: { id: 1, amountCents: { gte: stakeCents } },
-        data: { amountCents: { decrement: stakeCents } },
-      });
-
-      if (updated.count !== 1) {
-        throw new HttpError(400, "Insufficient bankroll");
-      }
-
-      return tx.ticket.create({
-        data: {
-          stakeCents,
-          totalOdds,
-          legs: {
-            create: legsWithOdds.map((l) => ({
-              matchId: l.matchId,
-              pick: l.pick,
-              oddsUsed: l.oddsUsed,
-            })),
-          },
-        },
-        include: {
-          legs: { include: { match: true } },
-        },
-      });
+    const ticket = await createTicketForUser(auth.session.userId, {
+      stakeCents,
+      legs,
     });
 
     return NextResponse.json({ ok: true, ticket });
   } catch (e: unknown) {
-    if (e instanceof HttpError) {
-      return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
+    if (e instanceof TicketServiceError) {
+      return NextResponse.json(
+        { ok: false, error: e.message, ...(e.extra ?? {}) },
+        { status: e.status }
+      );
     }
     const message = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
 
-export async function GET() {
-  const tickets = await prisma.ticket.findMany({
-    orderBy: { placedAt: "desc" },
-    include: {
-      legs: {
-        include: { match: true },
-        orderBy: { id: "asc" },
-      },
-    },
-  });
+export async function GET(req: Request) {
+  const auth = requireUser(req);
+  if (!auth.ok) return auth.response;
+
+  const tickets = await listUserTickets(auth.session.userId);
 
   return NextResponse.json({ tickets });
 }

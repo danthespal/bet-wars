@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { Ticket } from "@/lib/types";
 import { fmtCents, formatKickoffUTC, pickLabel } from "@/lib/betting";
 
@@ -43,23 +44,33 @@ export function TicketsList({
   tickets,
   expandedTicketId,
   onToggleExpanded,
+  maxItems = 8,
+  title = "My Tickets",
+  emptyMessage = "No tickets yet.",
+  footerMessage,
 }: {
   tickets: Ticket[];
   expandedTicketId: number | null;
   onToggleExpanded: (ticketId: number) => void;
+  maxItems?: number | null;
+  title?: string;
+  emptyMessage?: string;
+  footerMessage?: ReactNode;
 }) {
+  const visibleTickets = maxItems == null ? tickets : tickets.slice(0, maxItems);
+
   return (
     <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-900">My Tickets</div>
+        <div className="text-sm font-semibold text-slate-900">{title}</div>
         <div className="text-xs text-slate-500">Total {tickets.length}</div>
       </div>
 
       {tickets.length === 0 ? (
-        <div className="mt-3 text-sm text-slate-600">No tickets yet.</div>
+        <div className="mt-3 text-sm text-slate-600">{emptyMessage}</div>
       ) : (
         <div className="mt-3 space-y-2">
-          {tickets.slice(0, 8).map((t) => {
+          {visibleTickets.map((t) => {
             const expanded = expandedTicketId === t.id;
 
             const potentialCents = Math.round(t.stakeCents * t.totalOdds);
@@ -150,8 +161,15 @@ export function TicketsList({
             );
           })}
 
-          {tickets.length > 8 && (
-            <div className="text-xs text-slate-500">Showing latest 8 tickets. (We can add pagination next.)</div>
+          {footerMessage ? (
+            <div className="text-xs text-slate-500">{footerMessage}</div>
+          ) : (
+            maxItems != null &&
+            tickets.length > maxItems && (
+              <div className="text-xs text-slate-500">
+                Showing latest {maxItems} tickets. (We can add pagination next.)
+              </div>
+            )
           )}
         </div>
       )}

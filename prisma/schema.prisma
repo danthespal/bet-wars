@@ -6,6 +6,17 @@ datasource db {
   provider = "sqlite"
 }
 
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String
+  role         String     @default("user")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tickets      Ticket[]
+  bankroll     Bankroll?
+}
+
 model Match {
   id              Int         @id @default(autoincrement())
   slateDate       String
@@ -25,6 +36,7 @@ model Match {
 
 model Ticket {
   id          Int       @id @default(autoincrement())
+  userId      Int
 
   stakeCents  Int
   payoutCents Int?
@@ -34,6 +46,7 @@ model Ticket {
   placedAt    DateTime  @default(now())
   settledAt   DateTime?
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   legs TicketLeg[]
 }
 
@@ -55,6 +68,8 @@ model TicketLeg {
 
 model Bankroll {
   id          Int       @id @default(autoincrement())
+  userId      Int       @unique
   amountCents Int       @default(100000) // 1000.00
   updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

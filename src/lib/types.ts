@@ -26,6 +26,7 @@ export type TicketLeg = {
 
 export type Ticket = {
   id: number;
+  userId: number;
   stakeCents: number;
   totalOdds: number;
   status: "open" | "settled" | "void" | string;
